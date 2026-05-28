@@ -13,7 +13,7 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  action?: "retry-otp";
+  action?: "reset-chat";
   actionLabel?: string;
   actionUrl?: string;
   imageUrl?: string;
@@ -48,6 +48,18 @@ type IntakeStep =
   | "ready";
 
 type ImageMode = "identify" | "generate";
+
+const INITIAL_ASSISTANT_MESSAGE =
+  "Hello! Before we start your architectural consultation, please share your full name.";
+
+const getInitialMessages = (): Message[] => [
+  {
+    id: "1",
+    role: "assistant",
+    content: INITIAL_ASSISTANT_MESSAGE,
+    timestamp: new Date(),
+  },
+];
 
 const WHATSAPP_ADMIN_PHONE = "628123456789";
 const WHATSAPP_ADMIN_DISPLAY = "08123456789";
@@ -196,15 +208,7 @@ const renderFormattedMessage = (content: string) => {
 };
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "assistant",
-      content:
-        "Hello! Before we start your architectural consultation, please share your full name.",
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(getInitialMessages);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
@@ -254,13 +258,13 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, assistantMessage]);
   };
 
-  const addRetryOtpMessage = (content: string) => {
+  const addResetChatMessage = (content: string) => {
     const assistantMessage: Message = {
       id: `${Date.now()}-assistant`,
       role: "assistant",
       content,
-      action: "retry-otp",
-      actionLabel: "Refresh OTP",
+      action: "reset-chat",
+      actionLabel: "Refresh Chat",
       timestamp: new Date(),
     };
 
@@ -333,29 +337,30 @@ export default function ChatPage() {
     );
   };
 
-  const retryOtpRequest = async () => {
-    if (!userIdentity.fullName || !userIdentity.email || !userIdentity.phoneNumber) {
-      addAssistantMessage(
-        "Please complete your full name, email, and phone number before requesting OTP again.",
-      );
-      return;
+  const resetChat = () => {
+    if (selectedImagePreview) {
+      URL.revokeObjectURL(selectedImagePreview);
     }
 
-    setLoading(true);
-
-    try {
-      setIntakeStep("otp");
-      await requestOtp(userIdentity);
-    } catch (error) {
-      console.error("Error retrying OTP:", error);
-      addRetryOtpMessage(
-        error instanceof ApiRequestError
-          ? error.message
-          : "Sorry, I could not send the OTP. Please check your details and try again.",
-      );
-    } finally {
-      setLoading(false);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
     }
+
+    setMessages(getInitialMessages());
+    setInput("");
+    setLoading(false);
+    setImageMode("identify");
+    setImageRemaining(1);
+    setSelectedImage(null);
+    setSelectedImagePreview("");
+    setIntakeStep("fullName");
+    setUserIdentity({
+      fullName: "",
+      email: "",
+      phoneNumber: "",
+      emailVerified: false,
+      projectIntent: "",
+    });
   };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -580,7 +585,7 @@ export default function ChatPage() {
         await requestOtp(nextIdentity);
       } catch (error) {
         console.error("Error requesting OTP:", error);
-        addRetryOtpMessage(
+        addResetChatMessage(
           error instanceof ApiRequestError
             ? error.message
             : "Sorry, I could not send the OTP. Please check your details and try again.",
@@ -600,7 +605,7 @@ export default function ChatPage() {
           await requestOtp(userIdentity);
         } catch (error) {
           console.error("Error resending OTP:", error);
-          addRetryOtpMessage(
+          addResetChatMessage(
             error instanceof ApiRequestError
               ? error.message
               : "Sorry, I could not resend the OTP. Please try again.",
@@ -864,10 +869,10 @@ export default function ChatPage() {
                     {message.actionLabel}
                   </a>
                 )}
-                {message.action === "retry-otp" && (
+                {message.action === "reset-chat" && (
                   <button
                     type="button"
-                    onClick={retryOtpRequest}
+                    onClick={resetChat}
                     disabled={loading}
                     className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brown-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brown-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
