@@ -1,0 +1,14 @@
+services:
+  architect-consultant-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: architect-consultant-web
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "3009:3000"
+    restart: unless-stopped
