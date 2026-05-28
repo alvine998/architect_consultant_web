@@ -1,11 +1,19 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { ApiRequestError, apiRequest, setStoredToken } from "@/lib/api-client";
-import { ImageIcon, MessageCircle, Sparkles, Upload, X } from "lucide-react";
+import {
+  ImageIcon,
+  MessageCircle,
+  RefreshCw,
+  Sparkles,
+  Upload,
+  X,
+} from "lucide-react";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  action?: "retry-otp";
   actionLabel?: string;
   actionUrl?: string;
   imageUrl?: string;
@@ -246,6 +254,19 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, assistantMessage]);
   };
 
+  const addRetryOtpMessage = (content: string) => {
+    const assistantMessage: Message = {
+      id: `${Date.now()}-assistant`,
+      role: "assistant",
+      content,
+      action: "retry-otp",
+      actionLabel: "Refresh OTP",
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, assistantMessage]);
+  };
+
   const addRabRoiHandoffMessage = () => {
     const assistantMessage: Message = {
       id: `${Date.now()}-assistant`,
@@ -310,6 +331,31 @@ export default function ChatPage() {
     addAssistantMessage(
       `${responseMessage} Please enter it to verify your email. Type "resend OTP" if you need a new code.`,
     );
+  };
+
+  const retryOtpRequest = async () => {
+    if (!userIdentity.fullName || !userIdentity.email || !userIdentity.phoneNumber) {
+      addAssistantMessage(
+        "Please complete your full name, email, and phone number before requesting OTP again.",
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      setIntakeStep("otp");
+      await requestOtp(userIdentity);
+    } catch (error) {
+      console.error("Error retrying OTP:", error);
+      addRetryOtpMessage(
+        error instanceof ApiRequestError
+          ? error.message
+          : "Sorry, I could not send the OTP. Please check your details and try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -534,7 +580,7 @@ export default function ChatPage() {
         await requestOtp(nextIdentity);
       } catch (error) {
         console.error("Error requesting OTP:", error);
-        addAssistantMessage(
+        addRetryOtpMessage(
           error instanceof ApiRequestError
             ? error.message
             : "Sorry, I could not send the OTP. Please check your details and try again.",
@@ -554,7 +600,7 @@ export default function ChatPage() {
           await requestOtp(userIdentity);
         } catch (error) {
           console.error("Error resending OTP:", error);
-          addAssistantMessage(
+          addRetryOtpMessage(
             error instanceof ApiRequestError
               ? error.message
               : "Sorry, I could not resend the OTP. Please try again.",
@@ -817,6 +863,17 @@ export default function ChatPage() {
                     <MessageCircle className="h-4 w-4" aria-hidden="true" />
                     {message.actionLabel}
                   </a>
+                )}
+                {message.action === "retry-otp" && (
+                  <button
+                    type="button"
+                    onClick={retryOtpRequest}
+                    disabled={loading}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brown-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brown-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    {message.actionLabel}
+                  </button>
                 )}
                 {isClient && (
                   <span
